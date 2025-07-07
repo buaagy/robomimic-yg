@@ -68,25 +68,31 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # performance will tank if you forget to do this!
         obs_encoder = replace_bn_with_gn(obs_encoder)
         
+        # 获取观测编码器(obs_encoder)输出特征的维度大小
         obs_dim = obs_encoder.output_shape()[0]
-
+        
         # create network object
+        # global_cond_dim = 计算为观测维度(obs_dim) * 观测时间步长(observation_horizon)
         noise_pred_net = DPNets.ConditionalUnet1D(
-            input_dim=self.ac_dim,
-            global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon
+            input_dim = self.ac_dim,
+            global_cond_dim = obs_dim * self.algo_config.horizon.observation_horizon
         )
 
         # the final arch has 2 parts
+        # obs_encoder: 观测编码器,负责处理输入状态,可根据输入数据类型选择CNN或MLP等不同架构
+        # noise_pred_net: 噪声预测网络,实现扩散过程的核心计算,通常实现为UNet或Transformer结构
         nets = nn.ModuleDict({
             "policy": nn.ModuleDict({
                 "obs_encoder": obs_encoder,
                 "noise_pred_net": noise_pred_net
             })
         })
-
+        
+        # 确保模型使用FP32精度并转移到指定设备
         nets = nets.float().to(self.device)
         
-        # setup noise scheduler
+        # setup noise scheduler,设置噪声调度器
+        # DDPM采用马尔可夫链过程逐步加噪,DDIM则通过非马尔可夫过程加速采样
         noise_scheduler = None
         if self.algo_config.ddpm.enabled:
             noise_scheduler = DDPMScheduler(
@@ -107,11 +113,12 @@ class DiffusionPolicyUNet(PolicyAlgo):
         else:
             raise RuntimeError()
         
-        # setup EMA
+        # setup EMA(指数移动平均),维护模型参数的影子权重,在每次参数更新时进行指数加权平均
+        # power参数控制历史权重的衰减率,值越大表示历史权重影响越小
         ema = None
         if self.algo_config.ema.enabled:
             ema = EMAModel(model=nets, power=self.algo_config.ema.power)
-                
+            
         # set attrs
         self.nets = nets
         self.noise_scheduler = noise_scheduler
