@@ -73,11 +73,13 @@ class DiffusionPolicyUNet(PolicyAlgo):
         
         # create network object
         # global_cond_dim = 计算为观测维度(obs_dim) * 观测时间步长(observation_horizon)
+        print(f"{obs_dim=}, {self.algo_config.horizon.observation_horizon=}")
         noise_pred_net = DPNets.ConditionalUnet1D(
             input_dim = self.ac_dim,
             global_cond_dim = obs_dim * self.algo_config.horizon.observation_horizon
+            
         )
-
+        
         # the final arch has 2 parts
         # obs_encoder: 观测编码器,负责处理输入状态,可根据输入数据类型选择CNN或MLP等不同架构
         # noise_pred_net: 噪声预测网络,实现扩散过程的核心计算,通常实现为UNet或Transformer结构
@@ -145,8 +147,11 @@ class DiffusionPolicyUNet(PolicyAlgo):
         Tp = self.algo_config.horizon.prediction_horizon
 
         input_batch = dict()
+        # 对batch["obs"]中的每个键值对,取前To个时间步的观测数据
         input_batch["obs"] = {k: batch["obs"][k][:, :To, :] for k in batch["obs"]}
+        # 使用get方法安全获取goal_obs,避免KeyError异常
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
+        # 取前Tp个时间步的动作数据
         input_batch["actions"] = batch["actions"][:, :Tp, :]
         
         # check if actions are normalized to [-1,1]
@@ -182,17 +187,15 @@ class DiffusionPolicyUNet(PolicyAlgo):
         Tp = self.algo_config.horizon.prediction_horizon
         action_dim = self.ac_dim
         B = batch["actions"].shape[0]
-        
+        print(f"{To=}, {Ta=}, {Tp=}")
+        print(f"{action_dim=}, {B=}")
         
         with TorchUtils.maybe_no_grad(no_grad=validate):
             info = super(DiffusionPolicyUNet, self).train_on_batch(batch, epoch, validate=validate)
             actions = batch["actions"]
             
             # encode obs
-            inputs = {
-                "obs": batch["obs"],
-                "goal": batch["goal_obs"]
-            }
+            inputs = {"obs": batch["obs"], "goal": batch["goal_obs"]}
             for k in self.obs_shapes:
                 # first two dimensions should be [B, T] for inputs
                 assert inputs["obs"][k].ndim - 2 == len(self.obs_shapes[k])
@@ -213,20 +216,16 @@ class DiffusionPolicyUNet(PolicyAlgo):
             
             # add noise to the clean actions according to the noise magnitude at each diffusion iteration
             # (this is the forward diffusion process)
-            noisy_actions = self.noise_scheduler.add_noise(
-                actions, noise, timesteps)
+            noisy_actions = self.noise_scheduler.add_noise(actions, noise, timesteps)
             
             # predict the noise residual
-            noise_pred = self.nets["policy"]["noise_pred_net"](
-                noisy_actions, timesteps, global_cond=obs_cond)
+            noise_pred = self.nets["policy"]["noise_pred_net"](noisy_actions, timesteps, global_cond=obs_cond)
             
             # L2 loss
             loss = F.mse_loss(noise_pred, noise)
             
             # logging
-            losses = {
-                "l2_loss": loss
-            }
+            losses = {"l2_loss": loss}
             info["losses"] = TensorUtils.detach(losses)
 
             if not validate:
@@ -241,9 +240,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
                 if self.ema is not None:
                     self.ema.step(self.nets)
                 
-                step_info = {
-                    "policy_grad_norms": policy_grad_norms
-                }
+                step_info = {"policy_grad_norms": policy_grad_norms}
                 info.update(step_info)
 
         return info
