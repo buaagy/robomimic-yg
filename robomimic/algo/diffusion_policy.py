@@ -73,7 +73,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         
         # create network object
         # global_cond_dim = 计算为观测维度(obs_dim) * 观测时间步长(observation_horizon)
-        print(f"{obs_dim=}, {self.algo_config.horizon.observation_horizon=}")
+        # print(f"{obs_dim=}, {self.algo_config.horizon.observation_horizon=}")
         noise_pred_net = DPNets.ConditionalUnet1D(
             input_dim = self.ac_dim,
             global_cond_dim = obs_dim * self.algo_config.horizon.observation_horizon
@@ -187,8 +187,8 @@ class DiffusionPolicyUNet(PolicyAlgo):
         Tp = self.algo_config.horizon.prediction_horizon
         action_dim = self.ac_dim
         B = batch["actions"].shape[0]
-        print(f"{To=}, {Ta=}, {Tp=}")
-        print(f"{action_dim=}, {B=}")
+        # print(f"{To=}, {Ta=}, {Tp=}")
+        # print(f"{action_dim=}, {B=}")
         
         with TorchUtils.maybe_no_grad(no_grad=validate):
             info = super(DiffusionPolicyUNet, self).train_on_batch(batch, epoch, validate=validate)
