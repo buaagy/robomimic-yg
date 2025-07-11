@@ -128,7 +128,8 @@ class DiffusionPolicyUNet(PolicyAlgo):
         self.action_check_done = False
         self.obs_queue = None
         self.action_queue = None
-    
+        
+    # 用于训练的输入预处理
     def process_batch_for_training(self, batch):
         """
         Processes input batch from a data loader to filter out
@@ -145,24 +146,28 @@ class DiffusionPolicyUNet(PolicyAlgo):
         To = self.algo_config.horizon.observation_horizon
         Ta = self.algo_config.horizon.action_horizon
         Tp = self.algo_config.horizon.prediction_horizon
-
+        
         input_batch = dict()
-        # 对batch["obs"]中的每个键值对,取前To个时间步的观测数据
+        # 对batch["obs"]中的每个键值对(如图像/关节位置等),都取前To个时间步的观测数据
         input_batch["obs"] = {k: batch["obs"][k][:, :To, :] for k in batch["obs"]}
-        # 使用get方法安全获取goal_obs,避免KeyError异常
+        # 使用get方法安全获取goal_obs,避免KeyError异常,当batch中不存在goal_obs键时返回默认值None
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
         # 取前Tp个时间步的动作数据
         input_batch["actions"] = batch["actions"][:, :Tp, :]
         
-        # check if actions are normalized to [-1,1]
+        # check if actions are normalized to [-1,1],归一化数据有利于扩散模型的梯度计算和收敛
         if not self.action_check_done:
             actions = input_batch["actions"]
+            # 逐元素比较生成布尔张量
             in_range = (-1 <= actions) & (actions <= 1)
+            # 检查布尔张量是否全部为True
             all_in_range = torch.all(in_range).item()
             if not all_in_range:
                 raise ValueError("'actions' must be in range [-1,1] for Diffusion Policy! Check if hdf5_normalize_action is enabled.")
+            # 避免重复检查
             self.action_check_done = True
-        
+            
+        # 将input_batch转换为浮点类型,并将数据迁移到指定设备(CPU/GPU)
         return TensorUtils.to_device(TensorUtils.to_float(input_batch), self.device)
         
     def train_on_batch(self, batch, epoch, validate=False):
@@ -186,7 +191,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         Ta = self.algo_config.horizon.action_horizon
         Tp = self.algo_config.horizon.prediction_horizon
         action_dim = self.ac_dim
-        B = batch["actions"].shape[0]
+        B = batch["actions"].shape[0]  # 批次大小
         # print(f"{To=}, {Ta=}, {Tp=}")
         # print(f"{action_dim=}, {B=}")
         
@@ -199,37 +204,41 @@ class DiffusionPolicyUNet(PolicyAlgo):
             for k in self.obs_shapes:
                 # first two dimensions should be [B, T] for inputs
                 assert inputs["obs"][k].ndim - 2 == len(self.obs_shapes[k])
-            
+            # 时间分布式编码,将编码器obs_encoder应用于每个时间步的观测数据
             obs_features = TensorUtils.time_distributed(inputs, self.nets["policy"]["obs_encoder"], inputs_as_kwargs=True)
             assert obs_features.ndim == 3  # [B, T, D]
-
+            # 特征扁平化,将时间步与特征维度合并为2D张量,即将[B, T, D]转换为[B, T*D]
             obs_cond = obs_features.flatten(start_dim=1)
             
             # sample noise to add to actions
+            # 生成与actions张量形状相同的‌高斯噪声‌(均值为0,方差为1)
             noise = torch.randn(actions.shape, device=self.device)
             
             # sample a diffusion iteration for each data point
+            # 为batch中的每个样本随机生成一个扩散时间步timesteps(范围从0到最大训练步数)
+            # 输出为形状为(B,)的长整型张量,其中B为批次大小
             timesteps = torch.randint(
                 0, self.noise_scheduler.config.num_train_timesteps, 
                 (B,), device=self.device
             ).long()
             
             # add noise to the clean actions according to the noise magnitude at each diffusion iteration
-            # (this is the forward diffusion process)
+            # 前向扩散过程
             noisy_actions = self.noise_scheduler.add_noise(actions, noise, timesteps)
             
-            # predict the noise residual
+            # predict the noise residual,预测噪声残差
             noise_pred = self.nets["policy"]["noise_pred_net"](noisy_actions, timesteps, global_cond=obs_cond)
             
-            # L2 loss
+            # L2 loss,使用均方误差(MSE)衡量预测噪声与真实噪声的差异
             loss = F.mse_loss(noise_pred, noise)
             
-            # logging
+            # logging,将损失值存入字典losses,便于后续监控或日志记录
             losses = {"l2_loss": loss}
+            # TensorUtils.detach切断计算图,避免梯度回传影响日志变量
             info["losses"] = TensorUtils.detach(losses)
 
             if not validate:
-                # gradient step
+                # gradient step,梯度反向传播
                 policy_grad_norms = TorchUtils.backprop_for_loss(
                     net=self.nets,
                     optim=self.optimizers["policy"],
@@ -237,9 +246,12 @@ class DiffusionPolicyUNet(PolicyAlgo):
                 )
                 
                 # update Exponential Moving Average of the model weights
+                # 对模型权重进行指数滑动平均,提升测试阶段的泛化性
+                # 原理:维护影子权重EMA_weights = decay * EMA_weights + (1 - decay) * Weights
                 if self.ema is not None:
                     self.ema.step(self.nets)
-                
+                    
+                # 将梯度范数等指标存入日志字典info,便于可视化或早停判断
                 step_info = {"policy_grad_norms": policy_grad_norms}
                 info.update(step_info)
 
