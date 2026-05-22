@@ -1,7 +1,7 @@
 {
     "algo_name": "hbc",
     "experiment": {
-        "name": "test",
+        "name": "hbc",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -12,7 +12,7 @@
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 50,
+            "every_n_epochs": 200,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
@@ -30,7 +30,7 @@
             "enabled": true,
             "n": 50,
             "horizon": 400,
-            "rate": 50,
+            "rate": 200,
             "warmstart": 0,
             "terminate_on_success": true
         },
@@ -38,8 +38,8 @@
         "ckpt_path": null
     },
     "train": {
-        "data": null,
-        "output_dir": "../hbc_trained_models",
+        "data": "../../datasets/proficient_human/can/low_dim_v15.hdf5",
+        "output_dir": "~/Documents/mooc_manipulation/chapter5/output",
         "normalize_weights_by_ds_size": false,
         "num_data_workers": 0,
         "hdf5_cache_mode": "all",
@@ -68,7 +68,7 @@
         "goal_mode": null,
         "cuda": true,
         "batch_size": 100,
-        "num_epochs": 2000,
+        "num_epochs": 1000,
         "seed": 1,
         "max_grad_norm": null
     },

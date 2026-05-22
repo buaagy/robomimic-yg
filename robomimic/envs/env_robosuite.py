@@ -9,6 +9,7 @@ from copy import deepcopy
 
 import robosuite
 import robosuite.utils.transform_utils as T
+
 try:
     # this is needed for ensuring robosuite can find the additional mimicgen environments (see https://mimicgen.github.io)
     import mimicgen
