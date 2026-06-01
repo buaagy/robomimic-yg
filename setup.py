@@ -16,7 +16,7 @@ setup(
         package for package in find_packages() if package.startswith("robomimic")
     ],
     install_requires=[
-        "numpy==1.23.2",
+        "numpy>=1.23.2",
         "h5py",
         "psutil",
         "tqdm",
@@ -27,9 +27,9 @@ setup(
         "imageio-ffmpeg",
         "matplotlib",
         #"egl_probe>=1.0.1",
-        "torch==2.0.1",
-        "torchvision==0.15.2",
-        "diffusers==0.11.1",
+        "torch>=2.0.1",
+        "torchvision>=0.15.2",
+        "diffusers>=0.11.1",
         "tianshou==0.4.10",
         "transformers",
     ],

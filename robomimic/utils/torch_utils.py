@@ -138,12 +138,14 @@ def lr_scheduler_from_optim_params(net_optim_params, net, optimizer, num_trainin
         lr_scheduler (torch.optim.lr_scheduler or None): learning rate scheduler
     """
     lr_scheduler_type = net_optim_params["learning_rate"]["scheduler_type"]
-
+    
+    from typing import Union, Optional
     from diffusers.optimization import (
-        Union, SchedulerType, Optional,
-        Optimizer, TYPE_TO_SCHEDULER_FUNCTION
+        SchedulerType,
+        Optimizer,
+        TYPE_TO_SCHEDULER_FUNCTION
     )
-
+    
     num_warmup_steps = net_optim_params["learning_rate"].get("num_warmup_steps", 10000)
     
     if lr_scheduler_type == "linear":
