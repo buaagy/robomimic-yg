@@ -220,7 +220,10 @@ def get_dataset(
     for i in range(len(ds_weights)):
         
         ds_kwargs_copy = deepcopy(ds_kwargs)
-
+        # Change so that we do not run out of cuda memory
+        if "lang_encoder" in ds_kwargs:
+            ds_kwargs_copy["lang_encoder"] = ds_kwargs["lang_encoder"]
+            
         keys = ["hdf5_path", "filter_by_attribute"]
 
         for k in keys:
